@@ -18,4 +18,4 @@ cmake .. \
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
     -DENABLE_TESTING:BOOL=OFF \
     -DBUILD_DEPS=ON
-make
+make -j 8
