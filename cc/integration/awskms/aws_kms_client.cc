@@ -90,7 +90,7 @@ StatusOr<std::string> Read(const std::string& filename) {
 // Extracts a value of 'name' from 'line', where 'line' must be in format:
 // name = some_value
 StatusOr<std::string> GetValue(absl::string_view name, absl::string_view line) {
-  std::vector<std::string> parts = absl::StrSplit(line, '=');
+  std::vector<std::string> parts = absl::StrSplit(line, " = ");
   if (parts.size() != 2 || absl::StripAsciiWhitespace(parts[0]) != name) {
     return ToStatusF(util::error::INVALID_ARGUMENT,
                      "Expected line in format '%s = some_value'.", name);
@@ -101,11 +101,18 @@ StatusOr<std::string> GetValue(absl::string_view name, absl::string_view line) {
 // Returns AWS credentials that are retrieved as follows:
 //
 // If 'credentials_path' is not empty, then only the specified file
-// is accessed, which should contain lines in the following format:
+// is accessed, which should contain lines in one of the following formats:
 //
 //   [default]
 //   aws_access_key_id = your_access_key_id
 //   aws_secret_access_key = your_secret_access_key
+//
+// Or:
+//
+//   [default]
+//   aws_access_key_id = your_access_key_id
+//   aws_secret_access_key = your_secret_access_key
+//   aws_session_token = your_session_token
 //
 // Otherwise, if 'credentials_path' is empty, the credentials are
 // searched for in the following order:
@@ -146,6 +153,18 @@ StatusOr<Aws::Auth::AWSCredentials> GetAwsCredentials(
                        "Invalid format of credentials in file '%s': %s",
                        credentials_path,
                        secret_key_result.status().error_message());
+    }
+    if (creds_lines.size() > 3 && !creds_lines[3].empty()) {
+      auto session_token_result = GetValue("aws_session_token", creds_lines[3]);
+      if (!session_token_result.ok()) {
+        return ToStatusF(util::error::INVALID_ARGUMENT,
+                        "Invalid format of credentials in file '%s': %s",
+                        credentials_path,
+                        session_token_result.status().error_message());
+      }
+      return Aws::Auth::AWSCredentials(key_id_result.ValueOrDie().c_str(),
+                                      secret_key_result.ValueOrDie().c_str(),
+                                      session_token_result.ValueOrDie().c_str());
     }
     return Aws::Auth::AWSCredentials(key_id_result.ValueOrDie().c_str(),
                                      secret_key_result.ValueOrDie().c_str());
